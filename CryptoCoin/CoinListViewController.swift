@@ -12,16 +12,29 @@ class CoinListViewController: UIViewController {
     private let searchController = UISearchController(searchResultsController: nil)
     private let viewModel = CoinViewModel()
     private var filterButton: UIBarButtonItem!
-    private var filterParentView = UIView()
+    private var filterView = CoinFilterView()
+    private var filterViewTopConstraint: NSLayoutConstraint!
+    
+    var loader: UIActivityIndicatorView = {
+        let loader = UIActivityIndicatorView(style: .large)
+        loader.color = .gray
+        loader.hidesWhenStopped = true
+        loader.translatesAutoresizingMaskIntoConstraints = false
+        return loader
+    }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
         setupUI()
         setupBindings()
-        
+        loadCoins()
+    }
+    
+    private func loadCoins() {
         Task {
+            showLoader()
             await viewModel.loadCoins()
+            hideLoader()
         }
     }
     
@@ -39,6 +52,8 @@ class CoinListViewController: UIViewController {
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+        
+        setUpFilterView()
     }
     
     private func setupNavigationBar() {
@@ -72,6 +87,7 @@ class CoinListViewController: UIViewController {
             guard let self else { return }
             DispatchQueue.main.async {
                 self.tableView.reloadData()
+                self.updateTableBackgroundView()
             }
         }
         
@@ -81,6 +97,7 @@ class CoinListViewController: UIViewController {
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             DispatchQueue.main.async {
                 self.present(alert, animated: true)
+                self.updateTableBackgroundView()
             }
         }
     }
@@ -97,62 +114,118 @@ extension CoinListViewController: UITableViewDataSource, UITableViewDelegate {
         cell.configure(with: coin)
         return cell
     }
+    
+    private func updateTableBackgroundView() {
+        if tableView.numberOfRows(inSection: 0) == 0 {
+            let noDataLabel = UILabel()
+            noDataLabel.text = "No Data Available"
+            noDataLabel.textColor = .gray
+            noDataLabel.textAlignment = .center
+            noDataLabel.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+            
+            tableView.backgroundView = noDataLabel
+        } else {
+            tableView.backgroundView = nil
+        }
+    }
 }
 
 extension CoinListViewController: UISearchBarDelegate {
     @objc private func toggleSearchBar() {
+        removeFilterView()
         navigationItem.searchController = searchController
         searchController.isActive = true
     }
     
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        removeFilterView()
         viewModel.searchCoins(searchText: searchText)
     }
     
     func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        removeFilterView()
         viewModel.searchCoins(searchText: "")
     }
 }
 
 extension CoinListViewController: CoinFilterViewDelegate {
-    @objc private func showFilterOptions() {
-        filterParentView.subviews.forEach { $0.removeFromSuperview() }
-        filterParentView.removeFromSuperview()
-        let filterView = CoinFilterView()
+    func setUpFilterView() {
         filterView.delegate = self
         filterView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(filterView)
+        filterViewTopConstraint = filterView.topAnchor.constraint(equalTo: view.bottomAnchor)
         
-        filterParentView = UIView(frame: CGRect(x: 0, y: view.bounds.height, width: view.bounds.width, height: 400))
-        filterParentView.backgroundColor = .white
-        filterParentView.layer.cornerRadius = 12
-        filterParentView.addSubview(filterView)
-        view.addSubview(filterParentView)
-        
-        // Layout for filter view
         NSLayoutConstraint.activate([
-            filterView.leadingAnchor.constraint(equalTo: filterParentView.leadingAnchor),
-            filterView.trailingAnchor.constraint(equalTo: filterParentView.trailingAnchor),
-            filterView.topAnchor.constraint(equalTo: filterParentView.topAnchor),
-            filterView.bottomAnchor.constraint(equalTo: filterParentView.bottomAnchor)
+            filterViewTopConstraint,
+            filterView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            filterView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            filterView.heightAnchor.constraint(equalToConstant: 300)
         ])
+        filterView.setupUI()
+        view.bringSubviewToFront(filterView)
+    }
+    
+    @objc private func showFilterOptions() {
+        filterViewTopConstraint.constant = -300
         
-        // Animate the bottom sheet
-        UIView.animate(withDuration: 0.3) { [weak self] in
-            guard let self else { return }
-            self.filterParentView.frame.origin.y = self.view.bounds.height - 400
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
         }
     }
     
     func didUpdateFilters(
         isActive: Bool,
-        type: String,
-        isNew: Bool,
-        notApplied: Bool
+        isInActive: Bool,
+        type: String?,
+        isNew: Bool
     ) {
-        if notApplied {
-            viewModel.searchCoins(searchText: "")
-            return
+        viewModel.filterCoins(
+            isActive: isActive,
+            inActive: isInActive,
+            type: type,
+            isNew: isNew
+        )
+    }
+    
+    func closeFilterView() {
+        filterViewTopConstraint.constant = 0
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
         }
-        viewModel.filterCoins(isActive: isActive, type: type, isNew: isNew)
+    }
+    
+    func removeFilters() {
+        viewModel.removeFilters()
+    }
+    
+    private func removeFilterView() {
+        closeFilterView()
+        filterView.subviews.forEach { $0.removeFromSuperview() }
+        filterView.removeFromSuperview()
+        filterView = CoinFilterView()
+        setUpFilterView()
+    }
+}
+
+extension CoinListViewController {
+    func showLoader() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.loader.superview == nil {
+                self.view.addSubview(self.loader)
+                
+                NSLayoutConstraint.activate([
+                    self.loader.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+                    self.loader.centerYAnchor.constraint(equalTo: self.view.centerYAnchor)
+                ])
+            }
+            self.view.bringSubviewToFront(loader)
+            self.loader.startAnimating()
+        }
+    }
+    
+    func hideLoader() {
+        loader.stopAnimating()
+        loader.removeFromSuperview()
     }
 }

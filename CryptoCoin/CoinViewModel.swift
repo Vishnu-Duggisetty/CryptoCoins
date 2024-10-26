@@ -30,18 +30,44 @@ class CoinViewModel {
         }
     }
     
-    // Filter coins based on parameters
-    func filterCoins(isActive: Bool?, type: String?, isNew: Bool?) {
-        filteredCoins = allCoins
-        if let isActive = isActive {
-            filteredCoins = filteredCoins.filter { $0.isActive == isActive }
-        }
+    func filterCoins(
+        isActive: Bool?,
+        inActive: Bool?,
+        type: String?,
+        isNew: Bool?
+    ) {
+        var coins = Set(allCoins)
         if let type = type {
-            filteredCoins = filteredCoins.filter { $0.type == type }
+            let inCoins = allCoins.filter { $0.type == type }
+            coins = Set(inCoins)
         }
-        if let isNew = isNew {
-            filteredCoins = filteredCoins.filter { $0.isNew == isNew }
+        
+        if isNew == true {
+            if coins.isEmpty {
+                let inCoins = allCoins.filter { $0.isNew == true }
+                coins = Set(inCoins)
+            } else {
+                let inCoins = coins.filter { $0.isNew == true }
+                coins = Set(inCoins)
+            }
         }
+        
+        let typeCoins = coins.isEmpty ? Set(allCoins) : coins
+        if isActive == true, inActive == false {
+            let inCoins = typeCoins.filter { $0.isActive == true }
+            coins = Set(inCoins)
+        }
+        if inActive == true, isActive == false {
+            let inCoins = typeCoins.filter { $0.isActive == false }
+            coins = Set(inCoins)
+        }
+        
+        filteredCoins = Array(coins)
+        onUpdate?()
+    }
+    
+    func removeFilters() {
+        filteredCoins = allCoins
         onUpdate?()
     }
     

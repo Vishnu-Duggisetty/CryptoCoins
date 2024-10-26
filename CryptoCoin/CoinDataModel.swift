@@ -11,7 +11,7 @@ enum cryptoType {
     case Token
     case Coin
 }
-struct Coin: Codable {
+struct Coin: Codable, Hashable {
     let name: String
     let symbol: String
     let isActive: Bool
