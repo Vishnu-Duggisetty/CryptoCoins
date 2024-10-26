@@ -9,7 +9,7 @@ import Foundation
 
 class CoinViewModel {
     private let coinService: CoinService
-    private(set) var allCoins: [Coin] = []
+    var allCoins: [Coin] = []
     var filteredCoins: [Coin] = []
     var onUpdate: (() -> Void)?
     var onError: ((String) -> Void)?
@@ -53,11 +53,11 @@ class CoinViewModel {
         }
         
         let typeCoins = coins.isEmpty ? Set(allCoins) : coins
-        if isActive == true, inActive == false {
+        if isActive == true, inActive != true {
             let inCoins = typeCoins.filter { $0.isActive == true }
             coins = Set(inCoins)
         }
-        if inActive == true, isActive == false {
+        if inActive == true, isActive != true {
             let inCoins = typeCoins.filter { $0.isActive == false }
             coins = Set(inCoins)
         }
